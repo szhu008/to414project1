@@ -5,9 +5,9 @@ date: "February 3, 2016"
 output: html_document
 ---
 
-This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+## Improving Bike Storage Capacity
 
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+In effort to identify the bike stations that are candidates for improving bike storage capacity, we decided to investigate the difference between bike departure and bike arrivals for each station.
 
 ```{r}
 
@@ -37,38 +37,142 @@ stationCount <- merge(numStartStation, numEndStation, sort = FALSE, by = "statio
 
 stationCount$dep_minus_arr <- stationCount$start_freq - stationCount$end_freq
 stationCount <- arrange(stationCount, stationCount$dep_minus_arr)
+```
 
+
+
+```{r}
 #get top 10 stations that have more arrivals than departures
 mostArrivalStations <- head(stationCount, 10)
 mostArrivalStations
 #get top 10 stations that have more departures than arrivals
 mostDepartureStations <- tail(stationCount, 10)
 mostDepartureStations
+longitude = c()
+latitude = c()
+for (i in 1:length(mostArrivalStations$station_id)){
+  longitude[i] = citibike$end.station.longitude[match(x = mostArrivalStations$station_id[i], table = citibike$end.station.id)]
+  latitude[i] = citibike$end.station.latitude[match(x = mostArrivalStations$station_id[i], table = citibike$end.station.id)]
+}
+
+mostArrivalStations$longitude = longitude
+mostArrivalStations$latitude = latitude
+
+longitude = c()
+latitude = c()
+for (i in 1:length(mostDepartureStations$station_id)){
+  longitude[i] = citibike$start.station.longitude[match(x = mostDepartureStations$station_id[i], table = citibike$start.station.id)]
+  latitude[i] = citibike$start.station.latitude[match(x = mostDepartureStations$station_id[i], table = citibike$start.station.id)]
+}
+
+mostDepartureStations$longitude = longitude
+mostDepartureStations$latitude = latitude
+
 #plot(numStartStation$freq ~ numStartStation$x)
 ```
 
-Next we will analyze the stations that originate the longest rides
-
-```{r}
-attach(citibike)
-avgDurationRidesById <- tapply(tripduration, start.station.id, mean, na.rm = TRUE)
-avgDurationRidesById <- sort(avgDurationRidesById)
-
-#find shortest 10 stations by duration
-head(avgDurationRidesById, 10)
-
-#find longest 10 stations by duration
-tail(avgDurationRidesById, 10)
-
-```
-
-Here is a map of new york
+To help visualize our findings, we will plot the stations with the most arrivals relative to departures as red points and the most departures relative to arrivals as blue points. Points with higher alpha indicate a larger difference between departure and arrivals.
 
 ```{r}
 library(ggplot2)
 library(ggmap)
-nymap <- get_map(location = "New York", maptype = "roadmap")
-ggmap(nymap)
+nymap <- get_map(location = "New York", zoom = 12, color = 'bw')
+
+#map the stations with the most arrivals relative to departures
+maxArrWeight <- max(-mostArrivalStations$dep_minus_arr)
+mostArrAlpha <- abs(mostArrivalStations$dep_minus_arr)/maxArrWeight
+maxDepWeight <- max(mostDepartureStations$dep_minus_arr)
+mostDepAlpha <- mostDepartureStations$dep_minus_arr/maxDepWeight
+
+mapPoints <- ggmap(nymap) + geom_point(aes(x = longitude, y = latitude), size = 6*mostArrAlpha, colour = 'red', data = mostArrivalStations) + geom_point(aes(x = longitude, y = latitude), size=6*mostDepAlpha, colour = 'blue', data = mostDepartureStations)
+mapPoints 
 ```
 
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+Naively, we can say that the red points are the best candidates for an increase in capacity since they have the most surplus in arrivals.
+
+## Reducing Bike Maintenance Bills
+
+Next, to address the increase in bike maintenance bills, we will first visualize the bike usage by bike ID. First we take a look at the total number of trips involving each bike.
+
+```{r}
+attach(citibike)
+bikeCount <- count(bikeid)
+
+#Number of unique bikes used over the month of December 2015
+print(nrow(bikeCount))
+
+#Analyze frequency 
+summary(bikeCount$freq)
+boxplot(bikeCount$freq, outline = FALSE, horizontal = TRUE, main = "Frequency of bike usage in December 2015", xlab = "Number of trips")
+```
+From the summary and graph above, we see that out of the `r nrow(bikeCount)` bikes, 
+
+However, not all trips have the same duration. So we chose to analyze each bike's total trip duration throughout the month of December 2015.
+```{r}
+attach(citibike)
+bikeUsageById <- tapply(tripduration, start.station.id, sum, na.rm = TRUE)
+bikeUsageById <- bikeUsageById/3600
+summary(bikeUsageById)
+boxplot(bikeUsageById, horizontal = TRUE, main = "Frequency of total bike duration in December 2015", xlab = "Accumulated Bike Duration (hours)")
+```
+
+From the graph above, it is easy to see that the frequency distribution is skewed to the right - meaning there are a few bikes with a much higher accumulated bike durations than the rest. Just by observing the box plot we can reasonably infer that some bikes are being used much more than other bikes. In fact the standard deviation of the total accumulated duration per bike is `r sd(bikeUsageById)`, which is significantly higher than 0, which is what we expect if all bikes truly had equal usage.
+
+## Youth and Tourist Promotion
+
+First we identify the bike stations that have the least youthful attendance.
+
+```{r}
+citibike$isYoung <- ifelse(test = is.na(citibike$birth.year), yes = FALSE, no = ((2016 - citibike$birth.year) <= 25))
+  
+stationYouthCount <- aggregate(x = citibike$isYoung, by = list(citibike$start.station.id), FUN = sum)
+colnames(stationYouthCount) <- c("station_id", "count")
+stationYouthCount <- stationYouthCount[order(stationYouthCount$count),]
+
+longitude = c()
+latitude = c()
+for (i in 1:length(stationYouthCount$station_id)){
+  longitude[i] = citibike$start.station.longitude[match(x = stationYouthCount$station_id[i], table = citibike$start.station.id)]
+  latitude[i] = citibike$start.station.latitude[match(x = stationYouthCount$station_id[i], table = citibike$start.station.id)]
+}
+stationYouthCount$longitude = longitude
+stationYouthCount$latitude = latitude
+
+#get the top 20 bike stations with the least amount of youth
+leastYouthfulStations <- head(stationYouthCount, n = 20)
+
+leastYouthMap <- get_map(location = "New York", zoom = 12, color = 'bw')
+
+#map the locations of the least youthful stations
+
+leastYouthfulPoints <- ggmap(leastYouthMap) + geom_point(aes(x = longitude, y = latitude),  colour = 'dark green', data = leastYouthfulStations)
+leastYouthfulPoints
+```
+
+Next we identify the stations less used by tourists
+
+```{r}  
+stationTourist <- aggregate(x = citibike$usertype == "Customer", by = list(citibike$start.station.id), FUN = sum)
+colnames(stationTourist) <- c("station_id", "count")
+stationTourist <- stationTourist[order(stationTourist$count),]
+
+longitude = c()
+latitude = c()
+for (i in 1:length(stationTourist$station_id)){
+  longitude[i] = citibike$start.station.longitude[match(x = stationTourist$station_id[i], table = citibike$start.station.id)]
+  latitude[i] = citibike$start.station.latitude[match(x = stationTourist$station_id[i], table = citibike$start.station.id)]
+}
+stationTourist$longitude = longitude
+stationTourist$latitude = latitude
+
+#get the top 20 bike stations with least amount of tourists
+stationLeastTuorist <- head(stationTourist, n = 20)
+
+leastTouristMap <- get_map(location = "New York", zoom = 12, color = 'bw')
+
+#map the locations of the least youthful stations
+
+leastTouristPoints <- ggmap(leastTouristMap) + geom_point(aes(x = longitude, y = latitude),  colour = 'dark blue', data = stationLeastTuorist)
+leastTouristPoints
+```
+
