@@ -1,0 +1,74 @@
+---
+title: "Group12-Project1"
+author: "Group12"
+date: "February 3, 2016"
+output: html_document
+---
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r}
+
+library(plyr)
+library(maps)
+
+#read in citibike data
+citibike <- read.csv("201512-citibike-tripdata.csv")
+
+#attach citibike
+attach(citibike)
+
+#take a look at the head
+head(citibike)
+
+#convert station id to factor
+start.station.id <- as.factor(start.station.id)
+end.station.id <- as.factor(end.station.id)
+
+#
+numStartStation <- count(start.station.id)
+colnames(numStartStation) <- c("station_id", "start_freq")
+numEndStation <- count(end.station.id)
+colnames(numEndStation) <- c("station_id", "end_freq")
+
+stationCount <- merge(numStartStation, numEndStation, sort = FALSE, by = "station_id")
+
+stationCount$dep_minus_arr <- stationCount$start_freq - stationCount$end_freq
+stationCount <- arrange(stationCount, stationCount$dep_minus_arr)
+
+#get top 10 stations that have more arrivals than departures
+mostArrivalStations <- head(stationCount, 10)
+mostArrivalStations
+#get top 10 stations that have more departures than arrivals
+mostDepartureStations <- tail(stationCount, 10)
+mostDepartureStations
+#plot(numStartStation$freq ~ numStartStation$x)
+```
+
+Next we will analyze the stations that originate the longest rides
+
+```{r}
+attach(citibike)
+avgDurationRidesById <- tapply(tripduration, start.station.id, mean, na.rm = TRUE)
+avgDurationRidesById <- sort(avgDurationRidesById)
+
+#find shortest 10 stations by duration
+head(avgDurationRidesById, 10)
+
+#find longest 10 stations by duration
+tail(avgDurationRidesById, 10)
+
+```
+
+Here is a map of new york
+
+```{r}
+library(ggplot2)
+library(ggmap)
+nymap <- get_map(location = "New York", maptype = "roadmap")
+ggmap(nymap)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
