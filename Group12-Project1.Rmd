@@ -189,8 +189,13 @@ leastTouristPoints
 library(lubridate)
 bikeStartTime <- as.character(citibike$starttime)
 bikeStartTime <- strptime(bikeStartTime, "%m/%d/%Y %H:%M:%S")
-bikeHour <- as.POSIXct(bikeStartTime[1])
+bikeStartByHour <- hour(bikeStartTime)
+bikeByHourCnt <- count(bikeStartByHour)
+colnames(bikeByHourCnt) <- c("Hour in Day", "Number of Bike Rides")
+barplot(bikeByHourCnt[,"Number of Bike Rides"], names.arg = bikeByHourCnt[,"Hour in Day"], main = "Bike Rides by Time of Day", xlab = "Time of Day", col = "light blue")
 ```
+
+The result interesting because we see a bi-modal distribution that peaks during 8 a.m. - 9 a.m. in the morning
 
 
 
