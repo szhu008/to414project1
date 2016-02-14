@@ -191,11 +191,32 @@ bikeStartTime <- as.character(citibike$starttime)
 bikeStartTime <- strptime(bikeStartTime, "%m/%d/%Y %H:%M:%S")
 bikeStartByHour <- hour(bikeStartTime)
 bikeByHourCnt <- count(bikeStartByHour)
-colnames(bikeByHourCnt) <- c("Hour in Day", "Number of Bike Rides")
-barplot(bikeByHourCnt[,"Number of Bike Rides"], names.arg = bikeByHourCnt[,"Hour in Day"], main = "Bike Rides by Time of Day", xlab = "Time of Day", col = "light blue")
+colnames(bikeByHourCnt) <- c("Time of Day", "Number of Bike Rides")
+barplot(bikeByHourCnt[,"Number of Bike Rides"], names.arg = bikeByHourCnt[,"Hour in Day"], main = "Bike Rides by Time of Day", xlab = "Time of Day", ylab = "Number of Bike Rides", col = "light blue")
 ```
 
-The result interesting because we see a bi-modal distribution that peaks during 8 a.m. - 9 a.m. in the morning
+The result interesting because we see a bi-modal distribution that peaks during 8 a.m. - 9 a.m. in the morning 5 p.m. - 6 p.m. in the evening. This makes it pretty apparent that bikes are used most often to commute to and from work.
+
+But what about bike usage by time during weekends? We decided to perform the same analysis above, but this time first partitioning the data set into weekends and weedays.
+
+```{r}
+isWeekend <- bikeStartTime$wday >= 6
+bikeStartWeekend <- bikeStartByHour[c(isWeekend)]
+bikeStartWeekday <- bikeStartByHour[c(!isWeekend)]
+
+d <- count(bikeStartWeekend)
+bikeByHourWeekday <- count(bikeStartWeekday)
+
+colnames(bikeByHourWeekend) <- c("Time of Day", "Number of Bike Rides")
+colnames(bikeByHourWeekday) <- c("Time of Day", "Number of Bike Rides")
+
+barplot(bikeByHourWeekend[,"Number of Bike Rides"], names.arg = bikeByHourWeekend[,"Time of Day"], main = "Weekend: Bike Rides by Time of Day", xlab = "Time of Day", ylab = "Number of Bike Rides", col = "light green")
+
+barplot(bikeByHourWeekday[,"Number of Bike Rides"], names.arg = bikeByHourWeekday[,"Time of Day"], main = "Weekday: Bike Rides by Time of Day", xlab = "Time of Day", ylab = "Number of Bike Rides", col = "violet")
+
+```
+
+The data seems to substantiate our claim that most bike rides are used to commute to and from work since we still observe the bi-modal distribution on the bike trip frequency graph over weekdays. However on weekends, 
 
 
 
