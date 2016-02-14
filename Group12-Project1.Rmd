@@ -39,7 +39,14 @@ stationCount$dep_minus_arr <- stationCount$start_freq - stationCount$end_freq
 stationCount <- arrange(stationCount, stationCount$dep_minus_arr)
 ```
 
+```{r}
+#build a table for bike station id to longitude/latitude
+uniqueStation <- citibike[!duplicated(citibike$start.station.id),c("start.station.id", "start.station.latitude", "start.station.longitude")]
+colnames(uniqueStation) <- c("station_id", "latitude", "longitude")
 
+#number of stations being used in December 2015
+nrow(uniqueStation)
+```
 
 ```{r}
 #get top 10 stations that have more arrivals than departures
@@ -175,4 +182,15 @@ leastTouristMap <- get_map(location = "New York", zoom = 12, color = 'bw')
 leastTouristPoints <- ggmap(leastTouristMap) + geom_point(aes(x = longitude, y = latitude),  colour = 'dark blue', data = stationLeastTuorist)
 leastTouristPoints
 ```
+
+
+### Analysis by time of day
+```{r}
+library(lubridate)
+bikeStartTime <- as.character(citibike$starttime)
+bikeStartTime <- strptime(bikeStartTime, "%m/%d/%Y %H:%M:%S")
+bikeHour <- as.POSIXct(bikeStartTime[1])
+```
+
+
 
