@@ -5,12 +5,9 @@ date: "February 3, 2016"
 output: html_document
 ---
 
-## Improving Bike Storage Capacity
-
-In effort to identify the bike stations that are candidates for improving bike storage capacity, we decided to investigate the difference between bike departure and bike arrivals for each station.
+##Data Exploration
 
 ```{r}
-
 library(plyr)
 library(maps)
 
@@ -23,11 +20,25 @@ attach(citibike)
 #take a look at the head
 head(citibike)
 
+#build a table for bike station id to longitude/latitude
+uniqueStation <- citibike[!duplicated(citibike$start.station.id),c("start.station.id", "start.station.latitude", "start.station.longitude", "start.station.name")]
+colnames(uniqueStation) <- c("station_id", "latitude", "longitude", "station_name")
+
+#number of stations being used in December 2015
+nrow(uniqueStation)
+```
+
+## Improving Bike Storage Capacity
+
+In effort to identify the bike stations that are candidates for improving bike storage capacity, we decided to investigate the difference between bike departure and bike arrivals for each station.
+
+```{r}
+
 #convert station id to factor
 start.station.id <- as.factor(start.station.id)
 end.station.id <- as.factor(end.station.id)
 
-#
+#Count start and end frequencies by station id
 numStartStation <- count(start.station.id)
 colnames(numStartStation) <- c("station_id", "start_freq")
 numEndStation <- count(end.station.id)
@@ -37,24 +48,15 @@ stationCount <- merge(numStartStation, numEndStation, sort = FALSE, by = "statio
 
 stationCount$dep_minus_arr <- stationCount$start_freq - stationCount$end_freq
 stationCount <- arrange(stationCount, stationCount$dep_minus_arr)
-```
 
-```{r}
-#build a table for bike station id to longitude/latitude
-uniqueStation <- citibike[!duplicated(citibike$start.station.id),c("start.station.id", "start.station.latitude", "start.station.longitude", "start.station.name")]
-colnames(uniqueStation) <- c("station_id", "latitude", "longitude", "station_name")
-
-#number of stations being used in December 2015
-nrow(uniqueStation)
-```
-
-```{r}
 #get top 10 stations that have more arrivals than departures
 mostArrivalStations <- head(stationCount, 10)
 mostArrivalStations
 #get top 10 stations that have more departures than arrivals
 mostDepartureStations <- tail(stationCount, 10)
 mostDepartureStations
+
+
 longitude = c()
 latitude = c()
 for (i in 1:length(mostArrivalStations$station_id)){
@@ -78,7 +80,7 @@ mostDepartureStations$latitude = latitude
 #plot(numStartStation$freq ~ numStartStation$x)
 ```
 
-To help visualize our findings, we will plot the stations with the most arrivals relative to departures as red points and the most departures relative to arrivals as blue points. Points with higher alpha indicate a larger difference between departure and arrivals.
+To help visualize our findings, we will plot the stations with the most arrivals relative to departures as red points and the most departures relative to arrivals as blue points. Points with larger radius indicate a larger difference between departure and arrivals.
 
 ```{r}
 library(ggplot2)
@@ -95,11 +97,13 @@ mapPoints <- ggmap(nymap) + geom_point(aes(x = longitude, y = latitude), size = 
 mapPoints 
 ```
 
-Naively, we can say that the red points are the best candidates for an increase in capacity since they have the most surplus in arrivals.
+### Recommendations
+Based off of this data, we recommend that storage capacity be increased at the locations with blue dots; this is to keep a high inventory of bikes in order to accommodate departure demand when there is not enough influx of arrivals to match that demand. We also recommend that storage capacity secondly be increased for locations with red dots to accommodate the influx of arrivals. Alternatively, the citibike system can implement a system that regularly transports bikes from red locations to blue locations; this system of transport would then remove the need to invest in storage capacity increase at red locations, though the exact costs and benefits of implementing this system versus increasing storage capacity at red locations would require another analysis to determine. 
+
 
 ## Reducing Bike Maintenance Bills
 
-Next, to address the increase in bike maintenance bills, we will first visualize the bike usage by bike ID. First we take a look at the total number of trips involving each bike.
+Next, to address the increase in bike maintenance bills, we will first explore  bike usage by bike ID. First we take a look at the total number of trips involving each bike.
 
 ```{r}
 attach(citibike)
@@ -110,11 +114,15 @@ print(nrow(bikeCount))
 
 #Analyze frequency 
 summary(bikeCount$freq)
+
+#plot box plot of bike usage frequency without outliers
 boxplot(bikeCount$freq, outline = FALSE, horizontal = TRUE, main = "Frequency of bike usage in December 2015", xlab = "Number of trips")
 ```
-From the summary and graph above, we see that out of the `r nrow(bikeCount)` bikes, 
 
-However, not all trips have the same duration. So we chose to analyze each bike's total trip duration throughout the month of December 2015.
+From the summary and boxplot above, we see that out of the `r nrow(bikeCount)` bikes, the interquartile range of `r IQR(bikeCount$freq)` trips is rather large with respect to the median of `r median(bikeCount$freq)` trips. This cursory analysis suggests that not all bikes are used an equal amount.
+
+However, not all trips have the same duration. So we chose to analyze each bike's total trip duration throughout the month of December 2015 as well.
+
 ```{r}
 attach(citibike)
 bikeUsageById <- tapply(tripduration, start.station.id, sum, na.rm = TRUE)
@@ -124,6 +132,101 @@ boxplot(bikeUsageById, horizontal = TRUE, main = "Frequency of total bike durati
 ```
 
 From the graph above, it is easy to see that the frequency distribution is skewed to the right - meaning there are a few bikes with a much higher accumulated bike durations than the rest. Just by observing the box plot we can reasonably infer that some bikes are being used much more than other bikes. In fact the standard deviation of the total accumulated duration per bike is `r sd(bikeUsageById)`, which is significantly higher than 0, which is what we expect if all bikes truly had equal usage.
+
+Since we have even more evidence to suggest the uneven distribution of bike usage, we will investigate bike stations and routes to see which stations/routes tend to have the longest trip durations.
+
+
+### Stations originating longest rides
+
+First, we want to analyze the trip duration data for stations originating the longest rides. We perform a cursory data exploration as follows:
+
+```{r}
+
+#get of trips duration in minutes
+dur <- citibike$tripduration/60
+dur <- sort(dur)
+summary(dur)
+boxplot(dur, horizontal = TRUE, xlab = "trip duration (minutes)", main = "Frequency analysis of bike trip duration in December 2015")
+```
+
+It is extremely apparent that there are a lot of outliers that do not make sense in the context of this data. For example, the maximum trip duration lasted `r max(dur)` minutes - which seems quite improbable given the context of intraday bike rentals. 
+
+Replotting the boxplot to remove the extreme outliers we see the following:
+
+```{r}
+boxplot(dur, horizontal = TRUE, outline= FALSE, xlab = "trip duration (minutes)", main = "Frequency analysis of bike trip duration in December 2015")
+```
+
+In this chart we see that the upper end of the trip duration is around 30 minutes. However, trip durations that are less than 2 hours may very well be considered a "normal" bike trip so we will filter for bike trips that are no more than 2 hours in duration.
+
+```{r}
+filteredDuration <- citibike[citibike$tripduration <= 120*60,]
+```
+
+To check that we did not remove too much essential data points, we see that out of `r ncol(citibike)` original trips, we have only removed `r length(dur[dur>120])` trips for being considered outliers.
+
+Now that we have filtered out some of the extreme tripduration data points, we will proceed to perform analysis on stations that originated the longest rides.
+
+
+```{r}
+avgDurationByStation <- aggregate(x = filteredDuration$tripduration, by = list(filteredDuration$start.station.id), FUN = mean)
+avgDurationByStation <- merge(x = avgDurationByStation, y = uniqueStation, by.x = 1, by.y = 1, sort = FALSE)
+colnames(avgDurationByStation) <- c("station_id", "average_trip_duration", "latitude", "longitude", "station_name")
+
+#sort by average duration
+avgDurationByStation <- avgDurationByStation[order(avgDurationByStation$average_trip_duration),]
+
+#shortest average duration bike routes
+shortestBikeRoutes <- head(avgDurationByStation, 10)
+shortestBikeRoutes
+
+#longest average duration bike routes
+longestBikeRoutes <- tail(avgDurationByStation, 10)
+longestBikeRoutes
+
+#plot the shortest duration bike routes
+nymap <- get_map(location = "New York", zoom = 12, color = 'bw')
+shortRouteMap <- ggmap(nymap) + geom_point(aes(x = longitude, y = latitude), colour = 'green', data = shortestBikeRoutes)
+shortRouteMap
+
+#plot the longest duration bike routes
+longRouteMap <- ggmap(nymap) + geom_point(aes(x = longitude, y = latitude), colour = 'dark green', data = longestBikeRoutes)
+longRouteMap
+```
+
+From the plot of shortest bike routes, it seems that the majority of stations are stationed around Brooklyn. The longest bike routes tend to originate in Manhattan stations.
+
+### Most Popular Routes
+```{r}
+SSandES = data.frame(citibike$start.station.id,citibike$end.station.id)
+allroutes = count(SSandES)
+allroutes = arrange(allroutes,desc(freq))
+
+popularroutes = head(allroutes,20)
+
+#append street name and long/lat info
+popularroutes = merge(popularroutes, uniqueStation, by.x = 1, by.y = 1)
+popularroutes = merge(popularroutes, uniqueStation, by.x = 2, by.y = 1)
+colnames(popularroutes) <- c("end_id", "start_id", "freq", "start_latitude", "start_longitude", "start_station_name", "end_latitude", "end_longitude", "end_station_name")
+
+nymap <- get_map(location = "New York", zoom = 12, color = 'bw')
+popularRouteMap <- ggmap(nymap)
+for (i in 1:length(popularroutes)){
+  from = as.character(paste("New York,", popularroutes[i, "start_station_name"]))
+  to = as.character(paste("New York,", popularroutes[i, "end_station_name"]))
+  route_df = route(from, to, structure = "route")
+  popularRouteMap <- popularRouteMap + geom_path(
+    aes(x = lon, y = lat), color = i+2, size = 1.5,
+    data = route_df, lineend = "round"
+  )
+}
+popularRouteMap
+```
+
+### Recommendations
+To minimize bike maintenance bills, we recommend the implementation of a system that regularly exchanges bikes between the stations that originate the longest rides with the stations that originate the shortest rides. Of course, this system would have its own costs, and a separate analysis would be needed to determine whether the pay-offs of the system are worth the costs. 
+
+After examining the most popular routes by bike in NYC, and found that these routes tend to be in lower-mid Manhattan as well as around parks and piers. We anticipate that the bikes following these routes will exhibit the most wear and require the most maintenance. To distribute the usage frequency, we recommend regularly refreshing and replacing the bikes commonly used at these "popular route" stations with those bikes of stations along other routes.
 
 ## Youth and Tourist Promotion
 
@@ -136,6 +239,7 @@ stationYouthCount <- aggregate(x = citibike$isYoung, by = list(citibike$start.st
 colnames(stationYouthCount) <- c("station_id", "count")
 stationYouthCount <- stationYouthCount[order(stationYouthCount$count),]
 
+#append longitude and latitude to data
 longitude = c()
 latitude = c()
 for (i in 1:length(stationYouthCount$station_id)){
@@ -151,7 +255,6 @@ leastYouthfulStations <- head(stationYouthCount, n = 20)
 leastYouthMap <- get_map(location = "New York", zoom = 12, color = 'bw')
 
 #map the locations of the least youthful stations
-
 leastYouthfulPoints <- ggmap(leastYouthMap) + geom_point(aes(x = longitude, y = latitude),  colour = 'dark green', data = leastYouthfulStations)
 leastYouthfulPoints
 ```
@@ -183,8 +286,15 @@ leastTouristPoints <- ggmap(leastTouristMap) + geom_point(aes(x = longitude, y =
 leastTouristPoints
 ```
 
+### Recommendation
 
-### Analysis by time of day
+With these maps we have identified the stations least used by youth and by tourists. Promotion should be targeted at these marked locations in order to increase youth and tourist customers. 
+
+## Load Balancing by Time of Day
+
+In general, the distribution of bike demand will heavily depend on the time of day (and day of the week) investigated. We now will perform an analysis of bike rental frequency by time of day.
+
+
 ```{r}
 library(lubridate)
 bikeStartTime <- as.character(citibike$starttime)
@@ -192,7 +302,7 @@ bikeStartTime <- strptime(bikeStartTime, "%m/%d/%Y %H:%M:%S")
 bikeStartByHour <- hour(bikeStartTime)
 bikeByHourCnt <- count(bikeStartByHour)
 colnames(bikeByHourCnt) <- c("Time of Day", "Number of Bike Rides")
-barplot(bikeByHourCnt[,"Number of Bike Rides"], names.arg = bikeByHourCnt[,"Hour in Day"], main = "Bike Rides by Time of Day", xlab = "Time of Day", ylab = "Number of Bike Rides", col = "light blue")
+barplot(bikeByHourCnt[,"Number of Bike Rides"], names.arg = bikeByHourCnt[,"Time of Day"], main = "Bike Rides by Time of Day", xlab = "Time of Day", ylab = "Number of Bike Rides", col = "light blue")
 ```
 
 The result interesting because we see a bi-modal distribution that peaks during 8 a.m. - 9 a.m. in the morning 5 p.m. - 6 p.m. in the evening. This makes it pretty apparent that bikes are used most often to commute to and from work.
@@ -206,6 +316,8 @@ bikeStartWeekday <- bikeStartByHour[c(!isWeekend)]
 
 d <- count(bikeStartWeekend)
 bikeByHourWeekday <- count(bikeStartWeekday)
+bikeByHourWeekend <- count(bikeStartWeekend)
+
 
 colnames(bikeByHourWeekend) <- c("Time of Day", "Number of Bike Rides")
 colnames(bikeByHourWeekday) <- c("Time of Day", "Number of Bike Rides")
@@ -218,97 +330,25 @@ barplot(bikeByHourWeekday[,"Number of Bike Rides"], names.arg = bikeByHourWeekda
 
 The data seems to substantiate our claim that most bike rides are used to commute to and from work since we still observe the bi-modal distribution on the bike trip frequency graph over weekdays. However on weekends, the graph looks more uni-modal with the peak at around 1 p.m. (which is usually a time that people explore the city and hang out with friends). 
 
-From the data above, 
+### Recommendation
 
-### Ride Frequency by Gender
+With this information, it is possible to regulate bike traffic and also increase revenue. We can place a slight increase on prices of rented bikes during the peak hours; we expect demand to be relatively inelastic at these hours where customers are travelling to and from work, thereby increasing revenue per consumer. To distribute bike usage, we can lower prices during hours where usage dips; we expect this may draw some more elastic demand, such as luxury trips (as indicated by most popular routes) for scenic rides around the park and pier, thereby making bike maintenance more manageable.   
+
+
+## Gender Asymmetry
+
+We decided to also investigate bike trips conditioned by gender of the bikers.
+
 ```{r}
-unknownBikers <- citibike[citibike$gender == 0,]
+undisclosedBikers <- citibike[citibike$gender == 0,]
 maleBikers <- citibike[citibike$gender == 1, ]
 femaleBikers <- citibike[citibike$gender == 2,]
 
+genderCount <- c(nrow(undisclosedBikers), nrow(maleBikers), nrow(femaleBikers))
+barplot(genderCount, names.arg = c("Undisclosed", "Male", "Female"), main = "Bike Trips by Gender", xlab = "Gender", ylab = "Number of Bike Trips", col = c(1,2,3))
 ```
 
-
-### Routes originating longest rides
-
-First we want to analyze the trip duration data
-```{r}
-
-#get of trips duration in minutes
-dur <- citibike$tripduration/60
-dur <- sort(dur)
-summary(dur)
-boxplot(dur, horizontal = TRUE, xlab = "trip duration (minutes)", main = "Frequency analysis of bike trip duration in December 2015")
-```
-
-It is extremely apparent that there are a lot of outliers that do not make sense in the context of this data. For example, the maximum trip duration lasted `r max(dur)` minutes - which clearly makes no sense. 
-
-Replotting the boxplot to remove the extreme outliers we see the following:
-```{r}
-boxplot(dur, horizontal = TRUE, outline= FALSE, xlab = "trip duration (minutes)", main = "Frequency analysis of bike trip duration in December 2015")
-```
-
-In this chart we see that the upper end of the trip duration is around 30 minutes. However, trip durations that are less than 2 hours may very well be considered a "normal" bike trip so we will filter for bike trips that are no more than 2 hours in duration.
-
-```{r}
-filteredDuration <- citibike[citibike$tripduration <= 120*60 & citibike$tripduration >= 60,]
-```
-
-To check that we did not remove too much essential data points, we see that out of `r ncol(citibike)` original trips, we have only removed `r length(dur[dur>120])` trips for being considered outliers.
-
-Now that we have filtered out some of the extreme tripduration data points, we will proceed to perform analysis on stations that originated the longest rides.
+From the data, we observe a very large gender asymmetry with respect to bike riders. We believe that this data highlights that Citibike's current promotional strategies have not been successful in attracting female bikers. This may be an issue that Citibike should attempt to address in order to increase its overall user base.
 
 
-```{r}
-avgDurationByStation <- aggregate(x = filteredDuration$tripduration, by = filteredDuration[,c("start.station.id", "end.station.id")], FUN = mean)
-avgDurationByStation <- merge(x = avgDurationByStation, y = uniqueStation, by.x = 2, by.y = 1, sort = FALSE)
-colnames(avgDurationByStation)[4] <- "end.latitude"
-colnames(avgDurationByStation)[5] <- "end.longitude"
-colnames(avgDurationByStation)[6] <- "end.station_name"
-
-avgDurationByStation <- merge(x = avgDurationByStation, y = uniqueStation, by.x = 2, by.y = 1, sort = FALSE)
-colnames(avgDurationByStation)[7] <- "start.latitude"
-colnames(avgDurationByStation)[8] <- "start.longitude"
-colnames(avgDurationByStation)[9] <- "start.station_name"
-
-#sort by average duration
-avgDurationByStation <- avgDurationByStation[order(avgDurationByStation$x),]
-
-#shortest average duration bike routes
-shortestBikeRoutes <- head(avgDurationByStation, 10)
-shortestBikeRoutes
-
-#longest average duration bike routes
-longestBikeRoutes <- tail(avgDurationByStation, 10)
-longestBikeRoutes
-
-#plot the shortest duration bike routes
-nymap <- get_map(location = "New York", zoom = 12, color = 'bw')
-shortRouteMap <- ggmap(nymap)
-
-for (i in 1:length(shortestBikeRoutes)){
-  from = as.character(paste("New York,",shortestBikeRoutes[i,"start.station_name"]))
-  to = as.character(paste("New York,", shortestBikeRoutes[i,"end.station_name"]))
-  route_df = route(from, to, structure = "route")
-  shortRouteMap <- shortRouteMap + geom_path(
-    aes(x = lon, y = lat),color = "red", size = 1.5,
-    data = route_df, lineend = "round"
-  )
-}
-shortRouteMap
-
-#plot the longest duration bike routes
-longRouteMap <- ggmap(nymap)
-
-for (i in 1:length(shortestBikeRoutes)){
-  from = as.character(paste("New York,",longestBikeRoutes[i,"start.station_name"]))
-  to = as.character(paste("New York,", longestBikeRoutes[i,"end.station_name"]))
-  route_df = route(from, to, structure = "route")
-  longRouteMap <- longRouteMap + geom_path(
-    aes(x = lon, y = lat),color = "blue", size = 1.5,
-    data = route_df, lineend = "round"
-  )
-}
-longRouteMap
-```
 
