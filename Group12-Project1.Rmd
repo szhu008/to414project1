@@ -41,8 +41,8 @@ stationCount <- arrange(stationCount, stationCount$dep_minus_arr)
 
 ```{r}
 #build a table for bike station id to longitude/latitude
-uniqueStation <- citibike[!duplicated(citibike$start.station.id),c("start.station.id", "start.station.latitude", "start.station.longitude")]
-colnames(uniqueStation) <- c("station_id", "latitude", "longitude")
+uniqueStation <- citibike[!duplicated(citibike$start.station.id),c("start.station.id", "start.station.latitude", "start.station.longitude", "start.station.name")]
+colnames(uniqueStation) <- c("station_id", "latitude", "longitude", "station_name")
 
 #number of stations being used in December 2015
 nrow(uniqueStation)
@@ -216,7 +216,99 @@ barplot(bikeByHourWeekday[,"Number of Bike Rides"], names.arg = bikeByHourWeekda
 
 ```
 
-The data seems to substantiate our claim that most bike rides are used to commute to and from work since we still observe the bi-modal distribution on the bike trip frequency graph over weekdays. However on weekends, 
+The data seems to substantiate our claim that most bike rides are used to commute to and from work since we still observe the bi-modal distribution on the bike trip frequency graph over weekdays. However on weekends, the graph looks more uni-modal with the peak at around 1 p.m. (which is usually a time that people explore the city and hang out with friends). 
+
+From the data above, 
+
+### Ride Frequency by Gender
+```{r}
+unknownBikers <- citibike[citibike$gender == 0,]
+maleBikers <- citibike[citibike$gender == 1, ]
+femaleBikers <- citibike[citibike$gender == 2,]
+
+```
 
 
+### Routes originating longest rides
+
+First we want to analyze the trip duration data
+```{r}
+
+#get of trips duration in minutes
+dur <- citibike$tripduration/60
+dur <- sort(dur)
+summary(dur)
+boxplot(dur, horizontal = TRUE, xlab = "trip duration (minutes)", main = "Frequency analysis of bike trip duration in December 2015")
+```
+
+It is extremely apparent that there are a lot of outliers that do not make sense in the context of this data. For example, the maximum trip duration lasted `r max(dur)` minutes - which clearly makes no sense. 
+
+Replotting the boxplot to remove the extreme outliers we see the following:
+```{r}
+boxplot(dur, horizontal = TRUE, outline= FALSE, xlab = "trip duration (minutes)", main = "Frequency analysis of bike trip duration in December 2015")
+```
+
+In this chart we see that the upper end of the trip duration is around 30 minutes. However, trip durations that are less than 2 hours may very well be considered a "normal" bike trip so we will filter for bike trips that are no more than 2 hours in duration.
+
+```{r}
+filteredDuration <- citibike[citibike$tripduration <= 120*60 & citibike$tripduration >= 60,]
+```
+
+To check that we did not remove too much essential data points, we see that out of `r ncol(citibike)` original trips, we have only removed `r length(dur[dur>120])` trips for being considered outliers.
+
+Now that we have filtered out some of the extreme tripduration data points, we will proceed to perform analysis on stations that originated the longest rides.
+
+
+```{r}
+avgDurationByStation <- aggregate(x = filteredDuration$tripduration, by = filteredDuration[,c("start.station.id", "end.station.id")], FUN = mean)
+avgDurationByStation <- merge(x = avgDurationByStation, y = uniqueStation, by.x = 2, by.y = 1, sort = FALSE)
+colnames(avgDurationByStation)[4] <- "end.latitude"
+colnames(avgDurationByStation)[5] <- "end.longitude"
+colnames(avgDurationByStation)[6] <- "end.station_name"
+
+avgDurationByStation <- merge(x = avgDurationByStation, y = uniqueStation, by.x = 2, by.y = 1, sort = FALSE)
+colnames(avgDurationByStation)[7] <- "start.latitude"
+colnames(avgDurationByStation)[8] <- "start.longitude"
+colnames(avgDurationByStation)[9] <- "start.station_name"
+
+#sort by average duration
+avgDurationByStation <- avgDurationByStation[order(avgDurationByStation$x),]
+
+#shortest average duration bike routes
+shortestBikeRoutes <- head(avgDurationByStation, 10)
+shortestBikeRoutes
+
+#longest average duration bike routes
+longestBikeRoutes <- tail(avgDurationByStation, 10)
+longestBikeRoutes
+
+#plot the shortest duration bike routes
+nymap <- get_map(location = "New York", zoom = 12, color = 'bw')
+shortRouteMap <- ggmap(nymap)
+
+for (i in 1:length(shortestBikeRoutes)){
+  from = as.character(paste("New York,",shortestBikeRoutes[i,"start.station_name"]))
+  to = as.character(paste("New York,", shortestBikeRoutes[i,"end.station_name"]))
+  route_df = route(from, to, structure = "route")
+  shortRouteMap <- shortRouteMap + geom_path(
+    aes(x = lon, y = lat),color = "red", size = 1.5,
+    data = route_df, lineend = "round"
+  )
+}
+shortRouteMap
+
+#plot the longest duration bike routes
+longRouteMap <- ggmap(nymap)
+
+for (i in 1:length(shortestBikeRoutes)){
+  from = as.character(paste("New York,",longestBikeRoutes[i,"start.station_name"]))
+  to = as.character(paste("New York,", longestBikeRoutes[i,"end.station_name"]))
+  route_df = route(from, to, structure = "route")
+  longRouteMap <- longRouteMap + geom_path(
+    aes(x = lon, y = lat),color = "blue", size = 1.5,
+    data = route_df, lineend = "round"
+  )
+}
+longRouteMap
+```
 
