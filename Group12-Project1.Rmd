@@ -1,11 +1,13 @@
 ---
-title: "Group12-Project1"
+title: "Group12 - Module A: CitiBike"
 author: "Group12"
 date: "February 3, 2016"
 output: html_document
 ---
 
 ##Data Exploration
+
+We begin by exploring simple statistics from the CitiBike dataset:
 
 ```{r}
 library(plyr)
@@ -30,6 +32,18 @@ colnames(uniqueStation) <- c("station_id", "latitude", "longitude", "station_nam
 #number of stations being used in December 2015
 nrow(uniqueStation)
 ```
+
+Next we take a look at a density map of bike usage by start station.
+
+```{r}
+#density map of bike usage
+nymap <- get_map(location = "New York", zoom = 12, col = "bw")
+bikeDensityMap <- ggmap(nymap, legend = "topleft")
+dmap <- bikeDensityMap + stat_density_2d(aes(x = start.station.longitude, y = start.station.latitude, fill = ..level..), size = 4, data = citibike, geom = "polygon") + scale_fill_gradient(low = "light blue", high = "red")
+dmap
+```
+
+From this density map we see that most of the activity is centered inside Manhattan with scattered activities in Brooklyn and Queens.
 
 ## Improving Bike Storage Capacity
 
@@ -290,7 +304,7 @@ leastTouristPoints
 
 With these maps we have identified the stations least used by youth and by tourists. Promotion should be targeted at these marked locations in order to increase youth and tourist customers. 
 
-## Load Balancing by Time of Day
+## Load Balancing by Time
 
 In general, the distribution of bike demand will heavily depend on the time of day (and day of the week) investigated. We now will perform an analysis of bike rental frequency by time of day.
 
@@ -299,6 +313,10 @@ In general, the distribution of bike demand will heavily depend on the time of d
 bikeStartTime <- as.character(citibike$starttime)
 bikeStartTime <- strptime(bikeStartTime, "%m/%d/%Y %H:%M:%S")
 bikeStartByHour <- hour(bikeStartTime)
+
+#add hour to data frame
+citibike$hourofday <- bikeStartByHour
+
 bikeByHourCnt <- count(bikeStartByHour)
 colnames(bikeByHourCnt) <- c("Time of Day", "Number of Bike Rides")
 barplot(bikeByHourCnt[,"Number of Bike Rides"], names.arg = bikeByHourCnt[,"Time of Day"], main = "Bike Rides by Time of Day", xlab = "Time of Day", ylab = "Number of Bike Rides", col = "light blue")
@@ -309,6 +327,7 @@ The result interesting because we see a bi-modal distribution that peaks during 
 But what about bike usage by time during weekends? We decided to perform the same analysis above, but this time first partitioning the data set into weekends and weedays.
 
 ```{r}
+citibike$dayofweek <- bikeStartTime$wday
 isWeekend <- bikeStartTime$wday >= 6
 bikeStartWeekend <- bikeStartByHour[c(isWeekend)]
 bikeStartWeekday <- bikeStartByHour[c(!isWeekend)]
@@ -329,9 +348,29 @@ barplot(bikeByHourWeekday[,"Number of Bike Rides"], names.arg = bikeByHourWeekda
 
 The data seems to substantiate our claim that most bike rides are used to commute to and from work since we still observe the bi-modal distribution on the bike trip frequency graph over weekdays. However on weekends, the graph looks more uni-modal with the peak at around 1 p.m. (which is usually a time that people explore the city and hang out with friends). 
 
+Now lets take a look at a density graph of bike start stations by day of the week:
+```{r}
+nymap <- get_map(location = "New York", zoom = 12, col = "bw")
+bikeDensityMap <- ggmap(nymap, legend = "topleft")
+dmap <- bikeDensityMap + stat_density_2d(aes(x = start.station.longitude, y = start.station.latitude, fill = ..level..), size = 4, data = citibike, geom = "polygon") + scale_fill_gradient(low = "light blue", high = "red")
+
+dmapByDay <- dmap + facet_wrap(~ dayofweek)
+dmapByDay
+```
+
+From these graphs, we see that for weekdays (1-5), there seems to be two heavily used stations (one in the center of lower manhattan and the other in the east side). This suggests that most people commute to and from work from those two locations. 
+However on the weekends, the bike station usage is more dispersed with the heaviest density in the center of lower manhattan. 
+
+Furthermore if we take a look at frequency by time of day (in charts below), we notice that around 7 a.m. - 9 a.m. and 5 p.m. - 7 p.m., we observe the prominence of the two locations described previously.
+
+```{r}
+dmapByTime <- dmap + facet_wrap(~ hourofday)
+dmapByTime
+```
+
 ### Recommendation
 
-With this information, it is possible to regulate bike traffic and also increase revenue. We can place a slight increase on prices of rented bikes during the peak hours; we expect demand to be relatively inelastic at these hours where customers are travelling to and from work, thereby increasing revenue per consumer. To distribute bike usage, we can lower prices during hours where usage dips; we expect this may draw some more elastic demand, such as luxury trips (as indicated by most popular routes) for scenic rides around the park and pier, thereby making bike maintenance more manageable.   
+With this information, it is possible to regulate bike traffic and also increase revenue. We can place a slight increase on prices of rented bikes during the peak hours for specific locations (as seen on density map); we expect demand to be relatively inelastic at these hours where customers are travelling to and from work, thereby increasing revenue per consumer. To distribute bike usage, we can lower prices during hours where usage dips; we expect this may draw some more elastic demand, such as luxury trips (as indicated by most popular routes) for scenic rides around the park and pier, thereby making bike maintenance more manageable.   
 
 
 ## Gender Asymmetry
@@ -348,6 +387,8 @@ barplot(genderCount, names.arg = c("Undisclosed", "Male", "Female"), main = "Bik
 ```
 
 From the data, we observe a very large gender asymmetry with respect to bike riders. We believe that this data highlights that Citibike's current promotional strategies have not been successful in attracting female bikers. This may be an issue that Citibike should attempt to address in order to increase its overall user base.
+
+
 
 
 
