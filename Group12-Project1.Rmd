@@ -10,6 +10,9 @@ output: html_document
 ```{r}
 library(plyr)
 library(maps)
+library(ggplot2)
+library(ggmap)
+library(lubridate)
 
 #read in citibike data
 citibike <- read.csv("201512-citibike-tripdata.csv")
@@ -56,7 +59,7 @@ mostArrivalStations
 mostDepartureStations <- tail(stationCount, 10)
 mostDepartureStations
 
-
+#append longitude and latitude to most arrival stations data
 longitude = c()
 latitude = c()
 for (i in 1:length(mostArrivalStations$station_id)){
@@ -67,6 +70,7 @@ for (i in 1:length(mostArrivalStations$station_id)){
 mostArrivalStations$longitude = longitude
 mostArrivalStations$latitude = latitude
 
+#append longitude and latitude to most departure stations data
 longitude = c()
 latitude = c()
 for (i in 1:length(mostDepartureStations$station_id)){
@@ -76,15 +80,11 @@ for (i in 1:length(mostDepartureStations$station_id)){
 
 mostDepartureStations$longitude = longitude
 mostDepartureStations$latitude = latitude
-
-#plot(numStartStation$freq ~ numStartStation$x)
 ```
 
 To help visualize our findings, we will plot the stations with the most arrivals relative to departures as red points and the most departures relative to arrivals as blue points. Points with larger radius indicate a larger difference between departure and arrivals.
 
 ```{r}
-library(ggplot2)
-library(ggmap)
 nymap <- get_map(location = "New York", zoom = 12, color = 'bw')
 
 #map the stations with the most arrivals relative to departures
@@ -119,7 +119,7 @@ summary(bikeCount$freq)
 boxplot(bikeCount$freq, outline = FALSE, horizontal = TRUE, main = "Frequency of bike usage in December 2015", xlab = "Number of trips")
 ```
 
-From the summary and boxplot above, we see that out of the `r nrow(bikeCount)` bikes, the interquartile range of `r IQR(bikeCount$freq)` trips is rather large with respect to the median of `r median(bikeCount$freq)` trips. This cursory analysis suggests that not all bikes are used an equal amount.
+From the summary and boxplot above, we see that out of the `r nrow(bikeCount)` bikes, the interquartile range of `r IQR(bikeCount$freq)` trips is rather large with respect to the median of `r median(bikeCount$freq)` trips. This cursory analysis suggests that not all bikes are used an equal amount throughout the course of a month.
 
 However, not all trips have the same duration. So we chose to analyze each bike's total trip duration throughout the month of December 2015 as well.
 
@@ -163,7 +163,7 @@ In this chart we see that the upper end of the trip duration is around 30 minute
 filteredDuration <- citibike[citibike$tripduration <= 120*60,]
 ```
 
-To check that we did not remove too much essential data points, we see that out of `r ncol(citibike)` original trips, we have only removed `r length(dur[dur>120])` trips for being considered outliers.
+To check that we did not remove too much essential data points, we see that out of `r nrow(citibike)` original trips, we have only removed `r length(dur[dur>120])` trips for being considered outliers.
 
 Now that we have filtered out some of the extreme tripduration data points, we will proceed to perform analysis on stations that originated the longest rides.
 
@@ -296,7 +296,6 @@ In general, the distribution of bike demand will heavily depend on the time of d
 
 
 ```{r}
-library(lubridate)
 bikeStartTime <- as.character(citibike$starttime)
 bikeStartTime <- strptime(bikeStartTime, "%m/%d/%Y %H:%M:%S")
 bikeStartByHour <- hour(bikeStartTime)
